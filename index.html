@@ -30,7 +30,9 @@ h2{font:600 18px/1.3 system-ui,sans-serif;margin:28px 0 12px}
 .btn2{font:inherit;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:10px;padding:8px 12px;cursor:pointer;margin:-4px 0 8px}
 .estado{font-size:14px;color:var(--muted);min-height:1.2em;margin-bottom:12px}
 .lugar{font-size:14px;color:var(--muted)}
-.media img,.media video{display:block;width:100%;max-height:420px;object-fit:contain;border-radius:10px;background:var(--bg);margin:6px 0 10px}
+.media{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x mandatory;margin:6px 0 10px}
+.media>*{flex:0 0 88%;min-width:0;scroll-snap-align:start;max-height:420px;object-fit:contain;border-radius:10px;background:var(--bg)}
+.media>*:only-child{flex-basis:100%}
 .fila{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
 .fila .btn2{margin:0}
 .lugar a{color:var(--accent)}
@@ -41,6 +43,9 @@ h2{font:600 18px/1.3 system-ui,sans-serif;margin:28px 0 12px}
 .resaltado{outline:3px solid var(--accent)}
 input[type=date]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;height:44px;text-align:left}
 input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0;min-height:1.2em}
+select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px}
+.velo{position:fixed;inset:0;z-index:2000;background:var(--bg);overflow:auto;padding:calc(24px + env(safe-area-inset-top,0px)) 16px 24px}
+.velo form{max-width:600px;margin:0 auto}
 .aviso{color:#b3261e;font-size:14px;margin:-6px 0 12px;min-height:1em}
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -73,8 +78,9 @@ input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0;min-heigh
 </div>
 <input id="inFoto" type="file" accept="image/*" capture="environment" hidden>
 <input id="inVideo" type="file" accept="video/*" capture="environment" hidden>
-<input id="media" type="file" accept="image/*,video/*" hidden>
+<input id="media" type="file" accept="image/*,video/*" multiple hidden>
 <div class="estado" id="estadoMedia"></div>
+<button class="del" id="vaciar" type="button" style="display:none;margin:-6px 0 12px">Quitar archivos elegidos</button>
 <label for="lugar">Lugar (obligatorio)</label>
 <input id="lugar" maxlength="160" autocomplete="off" placeholder="Buscá un lugar, ej: Roma">
 <div class="fila"><button class="btn2" id="buscar" type="button">Buscar</button><button class="btn2" id="enMapa" type="button">Elegir en el mapa</button><button class="btn2" id="ubic" type="button">Mi ubicación</button></div>
@@ -86,6 +92,11 @@ input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0;min-heigh
 </form>
 <h2>Mis recuerdos</h2>
 <div id="lista"></div>
+<h2>Mi perfil</h2>
+<div class="card">
+<div class="fila"><button class="btn2" id="bPerfil" type="button">Editar mi perfil</button></div>
+<div class="estado" id="estadoPerfil"></div>
+</div>
 <h2>Copia de seguridad</h2>
 <div class="card">
 <div class="fila"><button class="btn2" id="bExp" type="button">Exportar copia</button><button class="btn2" id="bImp" type="button">Importar copia</button></div>
@@ -93,12 +104,30 @@ input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0;min-heigh
 <div class="estado" id="estadoCopia">Guardá el archivo en tu nube de vez en cuando.</div>
 </div>
 </main>
+<div id="perfilBox" class="velo" style="display:none">
+<form class="card" onsubmit="return false">
+<h2 id="perfilTitulo" style="margin-top:0">Creá tu perfil</h2>
+<label for="pNombre">Nombre</label>
+<input id="pNombre" maxlength="40" autocomplete="off">
+<label for="pGenero">Sexo</label>
+<select id="pGenero"><option value="">Elegí una opción</option><option value="hombre">Hombre</option><option value="mujer">Mujer</option><option value="otre">Otre</option></select>
+<div class="aviso" id="pAviso" role="alert"></div>
+<button class="save" id="pGuardar" type="button">Guardar perfil</button>
+<button class="btn2" id="pCerrar" type="button" style="display:none;width:100%;margin:10px 0 0">Cancelar</button>
+</form>
+</div>
 <script>
 var CLAVE = "diario:entradas";
 var entradas = [];
 function cargar(){
   try { var v = localStorage.getItem(CLAVE); entradas = v ? JSON.parse(v) : []; }
   catch(e){ entradas = []; }
+  entradas.forEach(normalizar);
+}
+function normalizar(n){
+  if(!n.media) n.media = [];
+  else if(!Array.isArray(n.media)) n.media = [n.media];
+  return n;
 }
 function guardarTodo(){
   try { localStorage.setItem(CLAVE, JSON.stringify(entradas)); return true; }
@@ -152,13 +181,13 @@ function reducirImagen(file){
   });
 }
 function mostrarMedia(box, m){
+  var el = document.createElement(m.tipo === "video" ? "video" : "img");
+  if(m.tipo === "video"){ el.controls = true; el.preload = "metadata"; el.playsInline = true; }
+  else { el.alt = "Foto del recuerdo"; }
+  box.append(el);
   leerMedia(m.id).then(function(blob){
-    if(!blob) return;
-    var el = document.createElement(m.tipo === "video" ? "video" : "img");
+    if(!blob){ el.remove(); return; }
     el.src = URL.createObjectURL(blob);
-    if(m.tipo === "video"){ el.controls = true; el.preload = "metadata"; el.playsInline = true; }
-    else { el.alt = "Foto del recuerdo"; }
-    box.append(el);
   });
 }
 var CLAVE_CAT = "diario:categorias";
@@ -187,7 +216,7 @@ function llenarCats(sel){
 function limpiarForm(){
   editando = null;
   ["titulo","texto","lugar","media","inFoto","inVideo"].forEach(function(i){ document.getElementById(i).value = ""; });
-  archivoSel = null; document.getElementById("estadoMedia").textContent = "";
+  archivosSel = []; refrescarSel();
   document.getElementById("fecha").value = hoy();
   llenarCats("");
   coords = null; mostrarCoords();
@@ -202,12 +231,12 @@ function iniciarEdicion(n){
   document.getElementById("titulo").value = n.titulo || "";
   document.getElementById("texto").value = n.texto || "";
   document.getElementById("lugar").value = n.lugar || "";
-  document.getElementById("media").value = ""; archivoSel = null; document.getElementById("estadoMedia").textContent = "";
+  document.getElementById("media").value = ""; archivosSel = []; refrescarSel();
   llenarCats(n.categoria);
   coords = null; if(n.ubicacion){ fijarCoords(n.ubicacion.lat, n.ubicacion.lon); } else { mostrarCoords(); }
   document.getElementById("guardar").textContent = "Guardar cambios";
   document.getElementById("cancelar").style.display = "block";
-  document.getElementById("aviso").textContent = n.media ? "Si no elegís otra foto o video, se mantiene el actual." : "";
+  document.getElementById("aviso").textContent = n.media.length ? "Los archivos actuales se mantienen; los nuevos se suman." : "";
   window.scrollTo({top:0, behavior:"smooth"});
 }
 function hoy(){
@@ -248,20 +277,20 @@ function dibujar(){
     }
     var b = document.createElement("button"); b.className = "del"; b.type = "button"; b.textContent = "Borrar recuerdo";
     var e = document.createElement("button"); e.className = "del"; e.type = "button"; e.textContent = "Editar recuerdo";
-    e.onclick = function(){ iniciarEdicion(n); };
+    e.onclick = function(){ if(confirm("¿Está seguro de que desea editar este recuerdo?")) iniciarEdicion(n); };
     b.onclick = function(){
-      if(confirm("¿Borrar este recuerdo?")){
-        if(n.media) borrarMedia(n.media.id);
+      if(confirm("¿Está seguro de que desea borrar este recuerdo? Esta acción no se puede deshacer.")){
+        n.media.forEach(function(m){ borrarMedia(m.id); });
         entradas = entradas.filter(function(x){return x.id !== n.id});
         guardarTodo(); dibujar();
       }
     };
     d.append(t,c,h);
-    if(n.media){
+    if(n.media.length){
       var box = document.createElement("div");
       box.className = "media";
       d.append(box);
-      mostrarMedia(box, n.media);
+      n.media.forEach(function(m){ mostrarMedia(box, m); });
     }
     d.append(p);
     if(l) d.append(l);
@@ -274,7 +303,7 @@ document.getElementById("guardar").onclick = async function(){
   var texto = document.getElementById("texto").value.trim();
   var fecha = document.getElementById("fecha").value;
   var lugar = document.getElementById("lugar").value.trim();
-  var archivo = archivoSel;
+  var archivos = archivosSel.slice();
   var aviso = document.getElementById("aviso");
   var previo = editando ? entradas.filter(function(x){return x.id === editando})[0] : null;
   var catSel = document.getElementById("cat").value;
@@ -286,19 +315,21 @@ document.getElementById("guardar").onclick = async function(){
       categoria = nombreNueva;
     }
   } else if(catSel){ categoria = catSel; }
-  if(!titulo && !texto && !archivo && !(previo && previo.media)){ aviso.textContent = "Escribí un título o un texto antes de guardar."; return; }
+  if(!titulo && !texto && !archivos.length && !(previo && previo.media.length)){ aviso.textContent = "Escribí un título o un texto antes de guardar."; return; }
   if(!coords){ aviso.textContent = "Elegí el lugar del recuerdo: buscalo, marcalo en el mapa o usá tu ubicación."; return; }
   aviso.textContent = "";
   var id = previo ? previo.id : Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-  var media = previo ? previo.media : null;
-  if(archivo){
+  var media = previo ? previo.media.slice() : [];
+  for(var k = 0; k < archivos.length; k++){
+    var archivo = archivos[k];
     var esVideo = archivo.type.indexOf("video") === 0;
-    if(esVideo && archivo.size > 80*1024*1024){ aviso.textContent = "El video pesa más de 80 MB. Elegí uno más corto."; return; }
+    if(esVideo && archivo.size > 80*1024*1024){ aviso.textContent = "Un video pesa más de 80 MB. Elegí uno más corto."; return; }
     try {
       var blob = esVideo ? archivo : await reducirImagen(archivo);
-      await guardarMedia(id, blob);
-      media = {id: id, tipo: esVideo ? "video" : "foto"};
-    } catch(e){ aviso.textContent = "No se pudo guardar el archivo en este dispositivo."; return; }
+      var mid = id + "-" + Date.now().toString(36) + k;
+      await guardarMedia(mid, blob);
+      media.push({id: mid, tipo: esVideo ? "video" : "foto"});
+    } catch(e){ aviso.textContent = "No se pudo guardar un archivo en este dispositivo."; return; }
   }
   var nueva = {
     id: id,
@@ -422,12 +453,13 @@ async function exportar(){
   try {
     var zip = new JSZip(), mimes = {};
     for(var i = 0; i < entradas.length; i++){
-      var m = entradas[i].media;
-      if(!m) continue;
-      var blob = await leerMedia(m.id);
-      if(blob){ mimes[m.id] = blob.type || ""; zip.file("media/" + m.id, blob); }
+      var ms = entradas[i].media || [];
+      for(var j = 0; j < ms.length; j++){
+        var blob = await leerMedia(ms[j].id);
+        if(blob){ mimes[ms[j].id] = blob.type || ""; zip.file("media/" + ms[j].id, blob); }
+      }
     }
-    zip.file("datos.json", JSON.stringify({version:1, exportado:new Date().toISOString(), categorias:categorias, mimes:mimes, entradas:entradas}, null, 1));
+    zip.file("datos.json", JSON.stringify({version:2, exportado:new Date().toISOString(), categorias:categorias, mimes:mimes, perfil:perfil, entradas:entradas}, null, 1));
     var out = await zip.generateAsync({type:"blob"});
     var a = document.createElement("a");
     a.href = URL.createObjectURL(out);
@@ -448,13 +480,18 @@ async function importar(file){
     for(var i = 0; i < datos.entradas.length; i++){
       var n = datos.entradas[i];
       if(ids[n.id]){ ya++; continue; }
-      if(n.media){
-        var f = zip.file("media/" + n.media.id);
+      normalizar(n);
+      var okMedia = [];
+      for(var j = 0; j < n.media.length; j++){
+        var mm = n.media[j];
+        var f = zip.file("media/" + mm.id);
         if(f){
           var ab = await f.async("arraybuffer");
-          await guardarMedia(n.media.id, new Blob([ab], {type: (datos.mimes || {})[n.media.id] || ""}));
-        } else { n.media = null; }
+          await guardarMedia(mm.id, new Blob([ab], {type: (datos.mimes || {})[mm.id] || ""}));
+          okMedia.push(mm);
+        }
       }
+      n.media = okMedia;
       entradas.push(n); nuevos++;
     }
     (datos.categorias || []).forEach(function(c){ if(categorias.indexOf(c) < 0) categorias.push(c); });
@@ -465,6 +502,39 @@ async function importar(file){
 document.getElementById("bExp").onclick = exportar;
 document.getElementById("bImp").onclick = function(){ document.getElementById("inImp").click(); };
 document.getElementById("inImp").onchange = function(){ var f = this.files[0]; this.value = ""; if(f) importar(f); };
+var CLAVE_PERFIL = "diario:perfil";
+var perfil = null;
+function cargarPerfil(){
+  try { var v = localStorage.getItem(CLAVE_PERFIL); perfil = v ? JSON.parse(v) : null; }
+  catch(e){ perfil = null; }
+}
+function mostrarPerfil(){
+  document.getElementById("estadoPerfil").textContent = perfil ? perfil.nombre : "";
+}
+function abrirPerfil(obligatorio){
+  document.getElementById("pNombre").value = perfil ? perfil.nombre : "";
+  document.getElementById("pGenero").value = perfil ? perfil.genero : "";
+  document.getElementById("pAviso").textContent = "";
+  document.getElementById("pCerrar").style.display = obligatorio ? "none" : "block";
+  document.getElementById("perfilTitulo").textContent = perfil ? "Tu perfil" : "Creá tu perfil";
+  document.getElementById("perfilBox").style.display = "block";
+  window.scrollTo(0, 0);
+}
+document.getElementById("pGuardar").onclick = function(){
+  var nombre = document.getElementById("pNombre").value.trim();
+  var genero = document.getElementById("pGenero").value;
+  var av = document.getElementById("pAviso");
+  if(!nombre || !genero){ av.textContent = "Completá tu nombre y elegí una opción."; return; }
+  try { localStorage.setItem(CLAVE_PERFIL, JSON.stringify({nombre: nombre, genero: genero})); }
+  catch(e){ av.textContent = "No se pudo guardar en este dispositivo."; return; }
+  perfil = {nombre: nombre, genero: genero};
+  mostrarPerfil();
+  document.getElementById("perfilBox").style.display = "none";
+};
+document.getElementById("pCerrar").onclick = function(){ document.getElementById("perfilBox").style.display = "none"; };
+document.getElementById("bPerfil").onclick = function(){ abrirPerfil(false); };
+cargarPerfil(); mostrarPerfil();
+if(!perfil) abrirPerfil(true);
 iniciarMapa();
 document.getElementById("cat").onchange = function(){
   var n = document.getElementById("catNueva");
@@ -472,11 +542,18 @@ document.getElementById("cat").onchange = function(){
   if(this.value === "__nueva") n.focus();
 };
 document.getElementById("cancelar").onclick = limpiarForm;
-var archivoSel = null;
-function elegir(inp){
-  archivoSel = inp.files[0] || null;
-  document.getElementById("estadoMedia").textContent = archivoSel ? "Archivo listo: " + archivoSel.name : "";
+var archivosSel = [];
+function refrescarSel(){
+  var n = archivosSel.length;
+  document.getElementById("estadoMedia").textContent = n ? n + (n === 1 ? " archivo listo" : " archivos listos") : "";
+  document.getElementById("vaciar").style.display = n ? "block" : "none";
 }
+function elegir(inp){
+  for(var i = 0; i < inp.files.length; i++) archivosSel.push(inp.files[i]);
+  inp.value = "";
+  refrescarSel();
+}
+document.getElementById("vaciar").onclick = function(){ archivosSel = []; refrescarSel(); };
 [["bFoto","inFoto"],["bVideo","inVideo"],["bGaleria","media"]].forEach(function(p){
   var inp = document.getElementById(p[1]);
   document.getElementById(p[0]).onclick = function(){ inp.click(); };
