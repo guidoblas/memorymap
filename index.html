@@ -36,12 +36,22 @@ h2{font:600 18px/1.3 system-ui,sans-serif;margin:28px 0 12px}
 .lugar a{color:var(--accent)}
 .etq{display:inline-block;margin-left:8px;font-size:12px;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:0 8px}
 .del+.del{margin-left:16px}
+#mapa{height:55vh;min-height:320px;border-radius:14px;border:1px solid var(--line);margin-bottom:10px}
+.sug{display:block;width:100%;text-align:left;font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:6px;cursor:pointer}
+.resaltado{outline:3px solid var(--accent)}
 .aviso{color:#b3261e;font-size:14px;margin:-6px 0 12px;min-height:1em}
 </style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
 </head>
 <body>
 <main>
 <h1>Mi diario</h1>
+<div id="mapaBox"><div id="mapa"></div></div>
+<button class="btn2" id="verMapa" type="button" style="margin:0 0 14px">Ocultar mapa</button>
 <form class="card" id="form" onsubmit="return false">
 <label for="fecha">Fecha del recuerdo</label>
 <input id="fecha" type="date">
@@ -62,9 +72,10 @@ h2{font:600 18px/1.3 system-ui,sans-serif;margin:28px 0 12px}
 <input id="inVideo" type="file" accept="video/*" capture="environment" hidden>
 <input id="media" type="file" accept="image/*,video/*" hidden>
 <div class="estado" id="estadoMedia"></div>
-<label for="lugar">Lugar</label>
-<input id="lugar" maxlength="120" autocomplete="off" placeholder="Ej: cocina de casa">
-<button class="btn2" id="ubic" type="button">Usar mi ubicación actual</button>
+<label for="lugar">Lugar (obligatorio)</label>
+<input id="lugar" maxlength="160" autocomplete="off" placeholder="Buscá un lugar, ej: Roma">
+<div class="fila"><button class="btn2" id="buscar" type="button">Buscar</button><button class="btn2" id="enMapa" type="button">Elegir en el mapa</button><button class="btn2" id="ubic" type="button">Mi ubicación</button></div>
+<div id="sugs"></div>
 <div class="estado" id="estadoUbic"></div>
 <div class="aviso" id="aviso" role="alert"></div>
 <button class="save" id="guardar" type="button">Guardar recuerdo</button>
@@ -171,6 +182,7 @@ function limpiarForm(){
   document.getElementById("fecha").value = hoy();
   llenarCats("");
   coords = null; mostrarCoords();
+  if(pinElegido && mp){ mp.removeLayer(pinElegido); pinElegido = null; }
   document.getElementById("guardar").textContent = "Guardar recuerdo";
   document.getElementById("cancelar").style.display = "none";
   document.getElementById("aviso").textContent = "";
@@ -183,7 +195,7 @@ function iniciarEdicion(n){
   document.getElementById("lugar").value = n.lugar || "";
   document.getElementById("media").value = ""; archivoSel = null; document.getElementById("estadoMedia").textContent = "";
   llenarCats(n.categoria);
-  coords = n.ubicacion || null; mostrarCoords();
+  coords = null; if(n.ubicacion){ fijarCoords(n.ubicacion.lat, n.ubicacion.lon); } else { mostrarCoords(); }
   document.getElementById("guardar").textContent = "Guardar cambios";
   document.getElementById("cancelar").style.display = "block";
   document.getElementById("aviso").textContent = n.media ? "Si no elegís otra foto o video, se mantiene el actual." : "";
@@ -198,6 +210,7 @@ function formatear(f){
   return new Date(+s[0], +s[1]-1, +s[2]).toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
 }
 function dibujar(){
+  pintarPines();
   var lista = document.getElementById("lista");
   lista.textContent = "";
   if(!entradas.length){
@@ -208,7 +221,7 @@ function dibujar(){
     return;
   }
   entradas.slice().sort(function(a,b){return (b.fecha.slice(0,10)+(b.creada||b.fecha)).localeCompare(a.fecha.slice(0,10)+(a.creada||a.fecha))}).forEach(function(n){
-    var d = document.createElement("article"); d.className = "nota card";
+    var d = document.createElement("article"); d.className = "nota card"; d.id = "r-" + n.id;
     var t = document.createElement("time"); t.dateTime = n.fecha.slice(0,10); t.textContent = formatear(n.fecha);
     var c = document.createElement("span"); c.className = "etq"; c.textContent = n.categoria || "Sin categoría";
     var h = document.createElement("h3"); h.textContent = n.titulo || "Sin título";
@@ -265,6 +278,7 @@ document.getElementById("guardar").onclick = async function(){
     }
   } else if(catSel){ categoria = catSel; }
   if(!titulo && !texto && !archivo && !(previo && previo.media)){ aviso.textContent = "Escribí un título o un texto antes de guardar."; return; }
+  if(!coords){ aviso.textContent = "Elegí el lugar del recuerdo: buscalo, marcalo en el mapa o usá tu ubicación."; return; }
   aviso.textContent = "";
   var id = previo ? previo.id : Date.now().toString(36) + Math.random().toString(36).slice(2,6);
   var media = previo ? previo.media : null;
@@ -303,8 +317,7 @@ document.getElementById("ubic").onclick = function(){
   if(!navigator.geolocation){ estado.textContent = "Este dispositivo no permite obtener la ubicación."; return; }
   estado.textContent = "Buscando ubicación…";
   navigator.geolocation.getCurrentPosition(function(pos){
-    coords = {lat: +pos.coords.latitude.toFixed(5), lon: +pos.coords.longitude.toFixed(5)};
-    mostrarCoords();
+    fijarCoords(pos.coords.latitude, pos.coords.longitude);
   }, function(){
     coords = null;
     estado.textContent = "No se pudo obtener la ubicación. Revisá el permiso o escribí el lugar a mano.";
@@ -313,6 +326,87 @@ document.getElementById("ubic").onclick = function(){
 document.getElementById("fecha").value = hoy();
 document.getElementById("fecha").max = hoy();
 cargar(); cargarCats(); llenarCats("");
+var mp = null, capa = null, eligiendo = false, pinElegido = null;
+function iniciarMapa(){
+  if(!window.L){ document.getElementById("mapa").textContent = "No se pudo cargar el mapa. Revisá tu conexión."; return; }
+  mp = L.map("mapa", {worldCopyJump:true}).setView([20,0], 2);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(mp);
+  capa = L.markerClusterGroup();
+  mp.addLayer(capa);
+  mp.on("click", function(ev){
+    if(!eligiendo) return;
+    eligiendo = false;
+    fijarCoords(ev.latlng.lat, ev.latlng.lng);
+  });
+  pintarPines();
+}
+function pintarPines(){
+  if(!capa) return;
+  capa.clearLayers();
+  entradas.forEach(function(n){
+    if(!n.ubicacion) return;
+    var m = L.marker([n.ubicacion.lat, n.ubicacion.lon]);
+    var d = document.createElement("div");
+    var b = document.createElement("b"); b.textContent = n.titulo || "Sin título";
+    d.append(b, document.createElement("br"), formatear(n.fecha));
+    m.bindPopup(d);
+    m.on("click", function(){ irARecuerdo(n.id); });
+    capa.addLayer(m);
+  });
+}
+function irARecuerdo(id){
+  var el = document.getElementById("r-" + id);
+  if(!el) return;
+  el.classList.add("resaltado");
+  setTimeout(function(){ el.classList.remove("resaltado"); }, 2500);
+}
+function fijarCoords(lat, lon, nombre){
+  coords = {lat: +lat.toFixed(5), lon: +lon.toFixed(5)};
+  if(nombre) document.getElementById("lugar").value = nombre;
+  mostrarCoords();
+  if(mp){
+    if(pinElegido) mp.removeLayer(pinElegido);
+    pinElegido = L.circleMarker([coords.lat, coords.lon], {radius:9}).addTo(mp);
+    mp.setView([coords.lat, coords.lon], Math.max(mp.getZoom(), 12));
+  }
+}
+document.getElementById("verMapa").onclick = function(){
+  var box = document.getElementById("mapaBox");
+  var oculto = box.style.display === "none";
+  box.style.display = oculto ? "block" : "none";
+  this.textContent = oculto ? "Ocultar mapa" : "Mostrar mapa";
+  if(oculto && mp) mp.invalidateSize();
+};
+document.getElementById("enMapa").onclick = function(){
+  if(document.getElementById("mapaBox").style.display === "none") document.getElementById("verMapa").click();
+  eligiendo = true;
+  document.getElementById("estadoUbic").textContent = "Tocá el mapa para marcar el lugar.";
+  window.scrollTo({top:0, behavior:"smooth"});
+};
+document.getElementById("buscar").onclick = async function(){
+  var q = document.getElementById("lugar").value.trim();
+  var cont = document.getElementById("sugs");
+  var estado = document.getElementById("estadoUbic");
+  cont.textContent = "";
+  if(!q) return;
+  estado.textContent = "Buscando…";
+  try {
+    var r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&accept-language=es&q=" + encodeURIComponent(q));
+    var datos = await r.json();
+    estado.textContent = datos.length ? "Tocá el lugar correcto:" : "No encontré ese lugar. Probá con otro nombre o marcalo en el mapa.";
+    datos.forEach(function(d){
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "sug"; b.textContent = d.display_name;
+      b.onclick = function(){
+        var partes = d.display_name.split(", ");
+        cont.textContent = "";
+        fijarCoords(parseFloat(d.lat), parseFloat(d.lon), partes.length > 1 ? partes[0] + ", " + partes[partes.length-1] : partes[0]);
+      };
+      cont.append(b);
+    });
+  } catch(e){ estado.textContent = "No se pudo buscar. Revisá tu conexión."; }
+};
+iniciarMapa();
 document.getElementById("cat").onchange = function(){
   var n = document.getElementById("catNueva");
   n.style.display = this.value === "__nueva" ? "block" : "none";
