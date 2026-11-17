@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi diario</title>
+<style>
+:root{--bg:#eef2f4;--surface:#fff;--ink:#1b2a33;--muted:#5b6b73;--accent:#1f6f78;--accent-ink:#fff;--line:#d5dde1;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121a1f;--surface:#1b262c;--ink:#e6eef1;--muted:#9bacb4;--accent:#6cc3cb;--accent-ink:#0d1a1d;--line:#2c3a42;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121a1f;--surface:#1b262c;--ink:#e6eef1;--muted:#9bacb4;--accent:#6cc3cb;--accent-ink:#0d1a1d;--line:#2c3a42;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:600px;margin:0 auto;padding:20px 16px 48px}
+h1{font:600 28px/1.2 "Iowan Old Style",Georgia,serif;margin:8px 0 16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+label{display:block;font-size:14px;color:var(--muted);margin:0 0 4px}
+input,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px}
+textarea{min-height:120px;resize:vertical}
+input:focus-visible,textarea:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.save{width:100%;font:600 16px system-ui,sans-serif;background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:12px;cursor:pointer}
+h2{font:600 18px/1.3 system-ui,sans-serif;margin:28px 0 12px}
+.nota{margin-bottom:12px}
+.nota time{font-size:13px;color:var(--muted)}
+.nota h3{font:600 20px/1.3 "Iowan Old Style",Georgia,serif;margin:2px 0 6px}
+.nota p{margin:0 0 10px;white-space:pre-wrap;overflow-wrap:anywhere}
+.del{background:none;border:0;color:var(--muted);font:inherit;font-size:14px;padding:4px 0;cursor:pointer;text-decoration:underline}
+.vacio{color:var(--muted);text-align:center;padding:24px 8px}
+.btn2{font:inherit;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:10px;padding:8px 12px;cursor:pointer;margin:-4px 0 8px}
+.estado{font-size:14px;color:var(--muted);min-height:1.2em;margin-bottom:12px}
+.lugar{font-size:14px;color:var(--muted)}
+.media img,.media video{display:block;width:100%;max-height:420px;object-fit:contain;border-radius:10px;background:var(--bg);margin:6px 0 10px}
+.fila{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.fila .btn2{margin:0}
+.lugar a{color:var(--accent)}
+.etq{display:inline-block;margin-left:8px;font-size:12px;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:0 8px}
+.del+.del{margin-left:16px}
+.aviso{color:#b3261e;font-size:14px;margin:-6px 0 12px;min-height:1em}
+</style>
+</head>
+<body>
+<main>
+<h1>Mi diario</h1>
+<form class="card" id="form" onsubmit="return false">
+<label for="fecha">Fecha del recuerdo</label>
+<input id="fecha" type="date">
+<label for="titulo">Título</label>
+<input id="titulo" maxlength="120" autocomplete="off">
+<label for="texto">Qué quiero recordar</label>
+<textarea id="texto"></textarea>
+<label for="cat">Categoría</label>
+<select id="cat"></select>
+<input id="catNueva" maxlength="40" autocomplete="off" placeholder="Nombre de la categoría nueva" style="display:none">
+<label>Foto o video</label>
+<div class="fila">
+<button class="btn2" type="button" id="bFoto">Sacar foto</button>
+<button class="btn2" type="button" id="bVideo">Grabar video</button>
+<button class="btn2" type="button" id="bGaleria">Galería</button>
+</div>
+<input id="inFoto" type="file" accept="image/*" capture="environment" hidden>
+<input id="inVideo" type="file" accept="video/*" capture="environment" hidden>
+<input id="media" type="file" accept="image/*,video/*" hidden>
+<div class="estado" id="estadoMedia"></div>
+<label for="lugar">Lugar</label>
+<input id="lugar" maxlength="120" autocomplete="off" placeholder="Ej: cocina de casa">
+<button class="btn2" id="ubic" type="button">Usar mi ubicación actual</button>
+<div class="estado" id="estadoUbic"></div>
+<div class="aviso" id="aviso" role="alert"></div>
+<button class="save" id="guardar" type="button">Guardar recuerdo</button>
+<button class="btn2" id="cancelar" type="button" style="display:none;width:100%;margin:10px 0 0">Cancelar edición</button>
+</form>
+<h2>Mis recuerdos</h2>
+<div id="lista"></div>
+</main>
+<script>
+var CLAVE = "diario:entradas";
+var entradas = [];
+function cargar(){
+  try { var v = localStorage.getItem(CLAVE); entradas = v ? JSON.parse(v) : []; }
+  catch(e){ entradas = []; }
+}
+function guardarTodo(){
+  try { localStorage.setItem(CLAVE, JSON.stringify(entradas)); return true; }
+  catch(e){ return false; }
+}
+var DB = null;
+function abrirDB(){
+  return new Promise(function(ok, no){
+    try {
+      var r = indexedDB.open("diario-media", 1);
+      r.onupgradeneeded = function(){ r.result.createObjectStore("media"); };
+      r.onsuccess = function(){ DB = r.result; ok(); };
+      r.onerror = function(){ no(r.error); };
+    } catch(e){ no(e); }
+  });
+}
+function guardarMedia(id, blob){
+  return new Promise(function(ok, no){
+    var tx = DB.transaction("media", "readwrite");
+    tx.objectStore("media").put(blob, id);
+    tx.oncomplete = ok;
+    tx.onerror = function(){ no(tx.error); };
+  });
+}
+function leerMedia(id){
+  return new Promise(function(ok){
+    try {
+      var rq = DB.transaction("media").objectStore("media").get(id);
+      rq.onsuccess = function(){ ok(rq.result || null); };
+      rq.onerror = function(){ ok(null); };
+    } catch(e){ ok(null); }
+  });
+}
+function borrarMedia(id){
+  try { DB.transaction("media", "readwrite").objectStore("media").delete(id); } catch(e){}
+}
+function reducirImagen(file){
+  return new Promise(function(ok){
+    var img = new Image(), url = URL.createObjectURL(file);
+    img.onload = function(){
+      var k = Math.min(1, 1600 / Math.max(img.width, img.height));
+      var c = document.createElement("canvas");
+      c.width = Math.round(img.width * k);
+      c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob(function(b){ ok(b || file); }, "image/jpeg", 0.85);
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); ok(file); };
+    img.src = url;
+  });
+}
+function mostrarMedia(box, m){
+  leerMedia(m.id).then(function(blob){
+    if(!blob) return;
+    var el = document.createElement(m.tipo === "video" ? "video" : "img");
+    el.src = URL.createObjectURL(blob);
+    if(m.tipo === "video"){ el.controls = true; el.preload = "metadata"; el.playsInline = true; }
+    else { el.alt = "Foto del recuerdo"; }
+    box.append(el);
+  });
+}
+var CLAVE_CAT = "diario:categorias";
+var categorias = [];
+var editando = null;
+function cargarCats(){
+  try { var v = localStorage.getItem(CLAVE_CAT); categorias = v ? JSON.parse(v) : []; }
+  catch(e){ categorias = []; }
+}
+function guardarCats(){
+  try { localStorage.setItem(CLAVE_CAT, JSON.stringify(categorias)); } catch(e){}
+}
+function llenarCats(sel){
+  var s = document.getElementById("cat");
+  s.textContent = "";
+  var o = document.createElement("option"); o.value = ""; o.textContent = "Sin categoría"; s.append(o);
+  categorias.forEach(function(c){
+    var x = document.createElement("option"); x.value = c; x.textContent = c; s.append(x);
+  });
+  var n = document.createElement("option"); n.value = "__nueva"; n.textContent = "+ Nueva categoría…"; s.append(n);
+  s.value = sel || "";
+  if(s.value !== (sel || "")){ s.value = ""; }
+  document.getElementById("catNueva").style.display = "none";
+  document.getElementById("catNueva").value = "";
+}
+function limpiarForm(){
+  editando = null;
+  ["titulo","texto","lugar","media","inFoto","inVideo"].forEach(function(i){ document.getElementById(i).value = ""; });
+  archivoSel = null; document.getElementById("estadoMedia").textContent = "";
+  document.getElementById("fecha").value = hoy();
+  llenarCats("");
+  coords = null; mostrarCoords();
+  document.getElementById("guardar").textContent = "Guardar recuerdo";
+  document.getElementById("cancelar").style.display = "none";
+  document.getElementById("aviso").textContent = "";
+}
+function iniciarEdicion(n){
+  editando = n.id;
+  document.getElementById("fecha").value = n.fecha.slice(0,10);
+  document.getElementById("titulo").value = n.titulo || "";
+  document.getElementById("texto").value = n.texto || "";
+  document.getElementById("lugar").value = n.lugar || "";
+  document.getElementById("media").value = ""; archivoSel = null; document.getElementById("estadoMedia").textContent = "";
+  llenarCats(n.categoria);
+  coords = n.ubicacion || null; mostrarCoords();
+  document.getElementById("guardar").textContent = "Guardar cambios";
+  document.getElementById("cancelar").style.display = "block";
+  document.getElementById("aviso").textContent = n.media ? "Si no elegís otra foto o video, se mantiene el actual." : "";
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+function hoy(){
+  var d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function formatear(f){
+  var s = f.slice(0,10).split("-");
+  return new Date(+s[0], +s[1]-1, +s[2]).toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+}
+function dibujar(){
+  var lista = document.getElementById("lista");
+  lista.textContent = "";
+  if(!entradas.length){
+    var v = document.createElement("div");
+    v.className = "vacio";
+    v.textContent = "Todavía no hay recuerdos. Escribí el primero arriba.";
+    lista.appendChild(v);
+    return;
+  }
+  entradas.slice().sort(function(a,b){return (b.fecha.slice(0,10)+(b.creada||b.fecha)).localeCompare(a.fecha.slice(0,10)+(a.creada||a.fecha))}).forEach(function(n){
+    var d = document.createElement("article"); d.className = "nota card";
+    var t = document.createElement("time"); t.dateTime = n.fecha.slice(0,10); t.textContent = formatear(n.fecha);
+    var c = document.createElement("span"); c.className = "etq"; c.textContent = n.categoria || "Sin categoría";
+    var h = document.createElement("h3"); h.textContent = n.titulo || "Sin título";
+    var p = document.createElement("p"); p.textContent = n.texto;
+    var l = null;
+    if(n.lugar || n.ubicacion){
+      l = document.createElement("p"); l.className = "lugar";
+      l.append("📍 " + (n.lugar || "Ubicación guardada"));
+      if(n.ubicacion){
+        var a = document.createElement("a");
+        a.href = "https://www.google.com/maps?q=" + n.ubicacion.lat + "," + n.ubicacion.lon;
+        a.target = "_blank"; a.rel = "noopener"; a.textContent = " Ver en el mapa";
+        l.append(a);
+      }
+    }
+    var b = document.createElement("button"); b.className = "del"; b.type = "button"; b.textContent = "Borrar recuerdo";
+    var e = document.createElement("button"); e.className = "del"; e.type = "button"; e.textContent = "Editar recuerdo";
+    e.onclick = function(){ iniciarEdicion(n); };
+    b.onclick = function(){
+      if(confirm("¿Borrar este recuerdo?")){
+        if(n.media) borrarMedia(n.media.id);
+        entradas = entradas.filter(function(x){return x.id !== n.id});
+        guardarTodo(); dibujar();
+      }
+    };
+    d.append(t,c,h);
+    if(n.media){
+      var box = document.createElement("div");
+      box.className = "media";
+      d.append(box);
+      mostrarMedia(box, n.media);
+    }
+    d.append(p);
+    if(l) d.append(l);
+    d.append(e); d.append(b);
+    lista.appendChild(d);
+  });
+}
+document.getElementById("guardar").onclick = async function(){
+  var titulo = document.getElementById("titulo").value.trim();
+  var texto = document.getElementById("texto").value.trim();
+  var fecha = document.getElementById("fecha").value;
+  var lugar = document.getElementById("lugar").value.trim();
+  var archivo = archivoSel;
+  var aviso = document.getElementById("aviso");
+  var previo = editando ? entradas.filter(function(x){return x.id === editando})[0] : null;
+  var catSel = document.getElementById("cat").value;
+  var categoria = null;
+  if(catSel === "__nueva"){
+    var nombreNueva = document.getElementById("catNueva").value.trim();
+    if(nombreNueva){
+      if(categorias.indexOf(nombreNueva) < 0){ categorias.push(nombreNueva); guardarCats(); }
+      categoria = nombreNueva;
+    }
+  } else if(catSel){ categoria = catSel; }
+  if(!titulo && !texto && !archivo && !(previo && previo.media)){ aviso.textContent = "Escribí un título o un texto antes de guardar."; return; }
+  aviso.textContent = "";
+  var id = previo ? previo.id : Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  var media = previo ? previo.media : null;
+  if(archivo){
+    var esVideo = archivo.type.indexOf("video") === 0;
+    if(esVideo && archivo.size > 80*1024*1024){ aviso.textContent = "El video pesa más de 80 MB. Elegí uno más corto."; return; }
+    try {
+      var blob = esVideo ? archivo : await reducirImagen(archivo);
+      await guardarMedia(id, blob);
+      media = {id: id, tipo: esVideo ? "video" : "foto"};
+    } catch(e){ aviso.textContent = "No se pudo guardar el archivo en este dispositivo."; return; }
+  }
+  var nueva = {
+    id: id,
+    titulo: titulo, texto: texto,
+    fecha: fecha || hoy(), creada: previo ? (previo.creada || previo.fecha) : new Date().toISOString(),
+    lugar: lugar || null, ubicacion: coords,
+    categoria: categoria, media: media
+  };
+  if(previo){ entradas = entradas.map(function(x){ return x.id === id ? nueva : x; }); }
+  else { entradas.push(nueva); }
+  if(!guardarTodo()){ aviso.textContent = "No se pudo guardar en este dispositivo."; }
+  document.getElementById("titulo").value = "";
+  document.getElementById("texto").value = "";
+  document.getElementById("lugar").value = "";
+  document.getElementById("fecha").value = hoy();
+  limpiarForm();
+  dibujar();
+};
+var coords = null;
+function mostrarCoords(){
+  document.getElementById("estadoUbic").textContent = coords ? "Ubicación añadida ✓" : "";
+}
+document.getElementById("ubic").onclick = function(){
+  var estado = document.getElementById("estadoUbic");
+  if(!navigator.geolocation){ estado.textContent = "Este dispositivo no permite obtener la ubicación."; return; }
+  estado.textContent = "Buscando ubicación…";
+  navigator.geolocation.getCurrentPosition(function(pos){
+    coords = {lat: +pos.coords.latitude.toFixed(5), lon: +pos.coords.longitude.toFixed(5)};
+    mostrarCoords();
+  }, function(){
+    coords = null;
+    estado.textContent = "No se pudo obtener la ubicación. Revisá el permiso o escribí el lugar a mano.";
+  }, {enableHighAccuracy:false, timeout:10000});
+};
+document.getElementById("fecha").value = hoy();
+document.getElementById("fecha").max = hoy();
+cargar(); cargarCats(); llenarCats("");
+document.getElementById("cat").onchange = function(){
+  var n = document.getElementById("catNueva");
+  n.style.display = this.value === "__nueva" ? "block" : "none";
+  if(this.value === "__nueva") n.focus();
+};
+document.getElementById("cancelar").onclick = limpiarForm;
+var archivoSel = null;
+function elegir(inp){
+  archivoSel = inp.files[0] || null;
+  document.getElementById("estadoMedia").textContent = archivoSel ? "Archivo listo: " + archivoSel.name : "";
+}
+[["bFoto","inFoto"],["bVideo","inVideo"],["bGaleria","media"]].forEach(function(p){
+  var inp = document.getElementById(p[1]);
+  document.getElementById(p[0]).onclick = function(){ inp.click(); };
+  inp.onchange = function(){ elegir(inp); };
+});
+abrirDB().catch(function(){}).then(dibujar);
+</script>
+</body>
+</html>
