@@ -46,6 +46,7 @@ h2{font:600 18px/1.3 system-ui,sans-serif;margin:28px 0 12px}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 <main>
@@ -83,6 +84,12 @@ h2{font:600 18px/1.3 system-ui,sans-serif;margin:28px 0 12px}
 </form>
 <h2>Mis recuerdos</h2>
 <div id="lista"></div>
+<h2>Copia de seguridad</h2>
+<div class="card">
+<div class="fila"><button class="btn2" id="bExp" type="button">Exportar copia</button><button class="btn2" id="bImp" type="button">Importar copia</button></div>
+<input id="inImp" type="file" accept=".zip,application/zip" hidden>
+<div class="estado" id="estadoCopia">Guardá el archivo en tu nube de vez en cuando.</div>
+</div>
 </main>
 <script>
 var CLAVE = "diario:entradas";
@@ -406,6 +413,56 @@ document.getElementById("buscar").onclick = async function(){
     });
   } catch(e){ estado.textContent = "No se pudo buscar. Revisá tu conexión."; }
 };
+async function exportar(){
+  var est = document.getElementById("estadoCopia");
+  if(typeof JSZip === "undefined"){ est.textContent = "No se pudo cargar el módulo de copias. Revisá tu conexión."; return; }
+  est.textContent = "Preparando la copia…";
+  try {
+    var zip = new JSZip(), mimes = {};
+    for(var i = 0; i < entradas.length; i++){
+      var m = entradas[i].media;
+      if(!m) continue;
+      var blob = await leerMedia(m.id);
+      if(blob){ mimes[m.id] = blob.type || ""; zip.file("media/" + m.id, blob); }
+    }
+    zip.file("datos.json", JSON.stringify({version:1, exportado:new Date().toISOString(), categorias:categorias, mimes:mimes, entradas:entradas}, null, 1));
+    var out = await zip.generateAsync({type:"blob"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(out);
+    a.download = "diario-copia-" + hoy() + ".zip";
+    document.body.append(a); a.click(); a.remove();
+    est.textContent = "Copia lista: " + entradas.length + " recuerdos. Guardala en tu nube.";
+  } catch(e){ est.textContent = "No se pudo crear la copia."; }
+}
+async function importar(file){
+  var est = document.getElementById("estadoCopia");
+  est.textContent = "Importando…";
+  try {
+    var zip = await JSZip.loadAsync(file);
+    var datos = JSON.parse(await zip.file("datos.json").async("string"));
+    var ids = {};
+    entradas.forEach(function(x){ ids[x.id] = true; });
+    var nuevos = 0, ya = 0;
+    for(var i = 0; i < datos.entradas.length; i++){
+      var n = datos.entradas[i];
+      if(ids[n.id]){ ya++; continue; }
+      if(n.media){
+        var f = zip.file("media/" + n.media.id);
+        if(f){
+          var ab = await f.async("arraybuffer");
+          await guardarMedia(n.media.id, new Blob([ab], {type: (datos.mimes || {})[n.media.id] || ""}));
+        } else { n.media = null; }
+      }
+      entradas.push(n); nuevos++;
+    }
+    (datos.categorias || []).forEach(function(c){ if(categorias.indexOf(c) < 0) categorias.push(c); });
+    guardarTodo(); guardarCats(); llenarCats(""); dibujar();
+    est.textContent = "Listo: " + nuevos + " recuerdos importados" + (ya ? " (" + ya + " ya estaban)." : ".");
+  } catch(e){ est.textContent = "No se pudo importar. Revisá que sea una copia del diario (.zip)."; }
+}
+document.getElementById("bExp").onclick = exportar;
+document.getElementById("bImp").onclick = function(){ document.getElementById("inImp").click(); };
+document.getElementById("inImp").onchange = function(){ var f = this.files[0]; this.value = ""; if(f) importar(f); };
 iniciarMapa();
 document.getElementById("cat").onchange = function(){
   var n = document.getElementById("catNueva");
