@@ -46,6 +46,16 @@ input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0;min-heigh
 select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:14px}
 .velo{position:fixed;inset:0;z-index:2000;background:var(--bg);overflow:auto;padding:calc(24px + env(safe-area-inset-top,0px)) 16px 24px}
 .velo form{max-width:600px;margin:0 auto}
+.top{display:flex;align-items:center;gap:10px;margin:4px 0 8px}
+.top h1{flex:1;margin:0}
+.ic{font:600 20px system-ui,sans-serif;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;width:44px;height:44px;cursor:pointer}
+.menu{position:fixed;top:0;left:0;bottom:0;width:80%;max-width:320px;background:var(--surface);border-right:1px solid var(--line);z-index:1500;padding:calc(16px + env(safe-area-inset-top,0px)) 12px 16px;overflow:auto;transform:translateX(-105%);transition:transform .2s}
+.cortina{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1400}
+.it{display:block;width:100%;text-align:left;font:inherit;color:var(--ink);background:none;border:0;border-radius:10px;padding:12px;cursor:pointer}
+.it:hover,.it:focus-visible{background:var(--bg)}
+.it.sub{padding-left:28px;font-size:15px;color:var(--muted)}
+.chk{display:flex;gap:8px;align-items:center;color:var(--ink)}
+input[type=checkbox]{width:auto;margin:0}
 .aviso{color:#b3261e;font-size:14px;margin:-6px 0 12px;min-height:1em}
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -57,10 +67,10 @@ select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px 
 </head>
 <body>
 <main>
-<h1>Mi diario</h1>
+<div class="top"><button class="ic" id="btnMenu" type="button" aria-label="Abrir menú">☰</button><h1>Mi diario</h1><button class="ic" id="btnNuevo" type="button" aria-label="Nuevo recuerdo">+</button></div>
 <p id="saludo" style="margin:-8px 0 14px;color:var(--muted)"></p>
 <div id="mapaBox"><div id="mapa"></div></div>
-<button class="btn2" id="verMapa" type="button" style="margin:0 0 14px">Ocultar mapa</button>
+<div id="secForm" style="display:none">
 <form class="card" id="form" onsubmit="return false">
 <label for="fecha">Fecha del recuerdo</label>
 <input id="fecha" type="date">
@@ -91,20 +101,47 @@ select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px 
 <button class="save" id="guardar" type="button">Guardar recuerdo</button>
 <button class="btn2" id="cancelar" type="button" style="display:none;width:100%;margin:10px 0 0">Cancelar edición</button>
 </form>
+</div>
+<div id="secBuscar" class="card" style="display:none;margin-bottom:12px">
+<label for="qTexto">Palabras clave</label>
+<input id="qTexto" maxlength="60" autocomplete="off" placeholder="Título, texto o lugar">
+<label for="qCat">Categoría</label>
+<select id="qCat"></select>
+<label class="chk"><input type="checkbox" id="qZona"> Solo lo que se ve en el mapa</label>
+</div>
+<div id="secLista">
 <h2>Mis recuerdos</h2>
+<div class="estado" id="contador"></div>
+<button class="btn2" id="qLimpiar" type="button" style="display:none;margin:0 0 12px">Quitar filtros</button>
 <div id="lista"></div>
+</div>
+<div id="secPerfil" style="display:none">
 <h2>Mi perfil</h2>
 <div class="card">
 <div class="fila"><button class="btn2" id="bPerfil" type="button">Editar mi perfil</button></div>
 <div class="estado" id="estadoPerfil"></div>
 </div>
+</div>
+<div id="secCopia" style="display:none">
 <h2>Copia de seguridad</h2>
 <div class="card">
 <div class="fila"><button class="btn2" id="bExp" type="button">Exportar copia</button><button class="btn2" id="bImp" type="button">Importar copia</button></div>
 <input id="inImp" type="file" accept=".zip,application/zip" hidden>
 <div class="estado" id="estadoCopia">Guardá el archivo en tu nube de vez en cuando.</div>
 </div>
+</div>
 </main>
+<div id="cortina" class="cortina" style="display:none"></div>
+<nav id="menu" class="menu" aria-label="Menú">
+<button class="it" type="button" data-vista="nuevo">Nuevo recuerdo</button>
+<button class="it" type="button" data-vista="hilo">Hilo de vida</button>
+<button class="it" type="button" data-vista="mapa">Mapa de vida</button>
+<button class="it" type="button" id="itCat">Categoría ▾</button>
+<div id="menuCats" style="display:none"></div>
+<button class="it" type="button" data-vista="buscar">Buscar</button>
+<button class="it" type="button" data-vista="perfil">Mi perfil</button>
+<button class="it" type="button" data-vista="copia">Copia de seguridad</button>
+</nav>
 <div id="perfilBox" class="velo" style="display:none">
 <form class="card" onsubmit="return false">
 <h2 id="perfilTitulo" style="margin-top:0">Creá tu perfil</h2>
@@ -213,6 +250,7 @@ function llenarCats(sel){
   if(s.value !== (sel || "")){ s.value = ""; }
   document.getElementById("catNueva").style.display = "none";
   document.getElementById("catNueva").value = "";
+  refrescarCats();
 }
 function limpiarForm(){
   editando = null;
@@ -238,7 +276,7 @@ function iniciarEdicion(n){
   document.getElementById("guardar").textContent = "Guardar cambios";
   document.getElementById("cancelar").style.display = "block";
   document.getElementById("aviso").textContent = n.media.length ? "Los archivos actuales se mantienen; los nuevos se suman." : "";
-  window.scrollTo({top:0, behavior:"smooth"});
+  vista("nuevo");
 }
 function hoy(){
   var d = new Date();
@@ -248,18 +286,21 @@ function formatear(f){
   var s = f.slice(0,10).split("-");
   return new Date(+s[0], +s[1]-1, +s[2]).toLocaleDateString("es-AR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
 }
-function dibujar(){
-  pintarPines();
+function dibujar(soloLista){
+  if(!soloLista) pintarPines();
   var lista = document.getElementById("lista");
   lista.textContent = "";
-  if(!entradas.length){
+  var vis = filtradas(true);
+  document.getElementById("contador").textContent = vis.length + (vis.length === 1 ? " recuerdo" : " recuerdos") + (hayFiltros() ? " con los filtros actuales" : "");
+  document.getElementById("qLimpiar").style.display = hayFiltros() ? "inline-block" : "none";
+  if(!vis.length){
     var v = document.createElement("div");
     v.className = "vacio";
-    v.textContent = "Todavía no hay recuerdos. Escribí el primero arriba.";
+    v.textContent = entradas.length ? "No hay recuerdos con estos filtros." : "Todavía no hay recuerdos. Abrí el menú y elegí Nuevo recuerdo.";
     lista.appendChild(v);
     return;
   }
-  entradas.slice().sort(function(a,b){return (b.fecha.slice(0,10)+(b.creada||b.fecha)).localeCompare(a.fecha.slice(0,10)+(a.creada||a.fecha))}).forEach(function(n){
+  vis.sort(function(a,b){return (b.fecha.slice(0,10)+(b.creada||b.fecha)).localeCompare(a.fecha.slice(0,10)+(a.creada||a.fecha))}).forEach(function(n){
     var d = document.createElement("article"); d.className = "nota card"; d.id = "r-" + n.id;
     var t = document.createElement("time"); t.dateTime = n.fecha.slice(0,10); t.textContent = formatear(n.fecha);
     var c = document.createElement("span"); c.className = "etq"; c.textContent = n.categoria || "Sin categoría";
@@ -348,6 +389,7 @@ document.getElementById("guardar").onclick = async function(){
   document.getElementById("fecha").value = hoy();
   limpiarForm();
   dibujar();
+  vista(vistaLista);
 };
 var coords = null;
 function mostrarCoords(){
@@ -374,6 +416,7 @@ function iniciarMapa(){
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(mp);
   capa = L.markerClusterGroup();
   mp.addLayer(capa);
+  mp.on("moveend", function(){ if(document.getElementById("qZona").checked) dibujar(true); });
   mp.on("click", function(ev){
     if(!eligiendo) return;
     eligiendo = false;
@@ -384,7 +427,7 @@ function iniciarMapa(){
 function pintarPines(){
   if(!capa) return;
   capa.clearLayers();
-  entradas.forEach(function(n){
+  filtradas(false).forEach(function(n){
     if(!n.ubicacion) return;
     var m = L.marker([n.ubicacion.lat, n.ubicacion.lon]);
     var d = document.createElement("div");
@@ -411,15 +454,12 @@ function fijarCoords(lat, lon, nombre){
     mp.setView([coords.lat, coords.lon], Math.max(mp.getZoom(), 12));
   }
 }
-document.getElementById("verMapa").onclick = function(){
-  var box = document.getElementById("mapaBox");
-  var oculto = box.style.display === "none";
-  box.style.display = oculto ? "block" : "none";
-  this.textContent = oculto ? "Ocultar mapa" : "Mostrar mapa";
-  if(oculto && mp) mp.invalidateSize();
-};
+function mostrarMapa(v){
+  document.getElementById("mapaBox").style.display = v ? "block" : "none";
+  if(v && mp) setTimeout(function(){ mp.invalidateSize(); }, 50);
+}
 document.getElementById("enMapa").onclick = function(){
-  if(document.getElementById("mapaBox").style.display === "none") document.getElementById("verMapa").click();
+  mostrarMapa(true);
   eligiendo = true;
   document.getElementById("estadoUbic").textContent = "Tocá el mapa para marcar el lugar.";
   window.scrollTo({top:0, behavior:"smooth"});
@@ -541,13 +581,84 @@ document.getElementById("pCerrar").onclick = function(){ document.getElementById
 document.getElementById("bPerfil").onclick = function(){ abrirPerfil(false); };
 cargarPerfil(); mostrarPerfil();
 if(!perfil) abrirPerfil(true);
+var vistaLista = "mapa";
+function norm(t){ return (t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+function hayFiltros(){
+  return !!document.getElementById("qTexto").value.trim() || (document.getElementById("qCat").value || "__todas") !== "__todas" || document.getElementById("qZona").checked;
+}
+function filtradas(conZona){
+  var q = norm(document.getElementById("qTexto").value.trim());
+  var c = document.getElementById("qCat").value || "__todas";
+  var b = (conZona && document.getElementById("qZona").checked && mp) ? mp.getBounds() : null;
+  return entradas.filter(function(n){
+    if(c === "__sin" && n.categoria) return false;
+    if(c !== "__todas" && c !== "__sin" && n.categoria !== c) return false;
+    if(q && norm((n.titulo || "") + " " + (n.texto || "") + " " + (n.lugar || "")).indexOf(q) < 0) return false;
+    if(b && !(n.ubicacion && b.contains([n.ubicacion.lat, n.ubicacion.lon]))) return false;
+    return true;
+  });
+}
+function refrescarCats(){
+  var q = document.getElementById("qCat");
+  var actual = q.value || "__todas";
+  var mc = document.getElementById("menuCats");
+  q.textContent = ""; mc.textContent = "";
+  var ops = [["__todas","Todas"],["__sin","Sin categoría"]].concat(categorias.map(function(c){ return [c,c]; }));
+  ops.forEach(function(o){
+    var op = document.createElement("option"); op.value = o[0]; op.textContent = o[1]; q.append(op);
+    var b = document.createElement("button"); b.type = "button"; b.className = "it sub"; b.textContent = o[1];
+    b.onclick = function(){ q.value = o[0]; dibujar(); vista(vistaLista); };
+    mc.append(b);
+  });
+  q.value = ops.some(function(o){ return o[0] === actual; }) ? actual : "__todas";
+}
+function abrirMenu(){
+  document.getElementById("menu").style.transform = "translateX(0)";
+  document.getElementById("cortina").style.display = "block";
+}
+function cerrarMenu(){
+  document.getElementById("menu").style.transform = "translateX(-105%)";
+  document.getElementById("cortina").style.display = "none";
+}
+function vista(v){
+  if(v === "mapa" || v === "hilo") vistaLista = v;
+  document.getElementById("secForm").style.display = v === "nuevo" ? "block" : "none";
+  document.getElementById("secBuscar").style.display = v === "buscar" ? "block" : "none";
+  document.getElementById("secLista").style.display = (v === "mapa" || v === "hilo" || v === "buscar") ? "block" : "none";
+  document.getElementById("secPerfil").style.display = v === "perfil" ? "block" : "none";
+  document.getElementById("secCopia").style.display = v === "copia" ? "block" : "none";
+  mostrarMapa(v === "mapa" || v === "nuevo" || (v === "buscar" && vistaLista === "mapa"));
+  cerrarMenu();
+  window.scrollTo(0, 0);
+}
+document.getElementById("btnMenu").onclick = abrirMenu;
+document.getElementById("cortina").onclick = cerrarMenu;
+document.getElementById("btnNuevo").onclick = function(){ limpiarForm(); vista("nuevo"); };
+document.getElementById("itCat").onclick = function(){
+  var mc = document.getElementById("menuCats");
+  mc.style.display = mc.style.display === "none" ? "block" : "none";
+};
+document.querySelectorAll("#menu [data-vista]").forEach(function(b){
+  b.onclick = function(){ if(b.dataset.vista === "nuevo") limpiarForm(); vista(b.dataset.vista); };
+});
+document.getElementById("qTexto").oninput = function(){ dibujar(); };
+document.getElementById("qCat").onchange = function(){ dibujar(); };
+document.getElementById("qZona").onchange = function(){ dibujar(); };
+document.getElementById("qLimpiar").onclick = function(){
+  document.getElementById("qTexto").value = "";
+  document.getElementById("qCat").value = "__todas";
+  document.getElementById("qZona").checked = false;
+  dibujar();
+};
+refrescarCats();
+vista("mapa");
 iniciarMapa();
 document.getElementById("cat").onchange = function(){
   var n = document.getElementById("catNueva");
   n.style.display = this.value === "__nueva" ? "block" : "none";
   if(this.value === "__nueva") n.focus();
 };
-document.getElementById("cancelar").onclick = limpiarForm;
+document.getElementById("cancelar").onclick = function(){ limpiarForm(); vista(vistaLista); };
 var archivosSel = [];
 function refrescarSel(){
   var n = archivosSel.length;
