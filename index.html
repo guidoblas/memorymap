@@ -58,6 +58,7 @@ select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px 
 <body>
 <main>
 <h1>Mi diario</h1>
+<p id="saludo" style="margin:-8px 0 14px;color:var(--muted)"></p>
 <div id="mapaBox"><div id="mapa"></div></div>
 <button class="btn2" id="verMapa" type="button" style="margin:0 0 14px">Ocultar mapa</button>
 <form class="card" id="form" onsubmit="return false">
@@ -277,9 +278,9 @@ function dibujar(){
     }
     var b = document.createElement("button"); b.className = "del"; b.type = "button"; b.textContent = "Borrar recuerdo";
     var e = document.createElement("button"); e.className = "del"; e.type = "button"; e.textContent = "Editar recuerdo";
-    e.onclick = function(){ if(confirm("¿Está seguro de que desea editar este recuerdo?")) iniciarEdicion(n); };
+    e.onclick = function(){ if(confirm("¿Está " + gen("seguro","segura","segure") + " de que desea editar este recuerdo?")) iniciarEdicion(n); };
     b.onclick = function(){
-      if(confirm("¿Está seguro de que desea borrar este recuerdo? Esta acción no se puede deshacer.")){
+      if(confirm("¿Está " + gen("seguro","segura","segure") + " de que desea borrar este recuerdo? Esta acción no se puede deshacer.")){
         n.media.forEach(function(m){ borrarMedia(m.id); });
         entradas = entradas.filter(function(x){return x.id !== n.id});
         guardarTodo(); dibujar();
@@ -508,8 +509,13 @@ function cargarPerfil(){
   try { var v = localStorage.getItem(CLAVE_PERFIL); perfil = v ? JSON.parse(v) : null; }
   catch(e){ perfil = null; }
 }
+function gen(m, f, o){
+  var g = perfil && perfil.genero;
+  return g === "mujer" ? f : (g === "otre" ? o : m);
+}
 function mostrarPerfil(){
   document.getElementById("estadoPerfil").textContent = perfil ? perfil.nombre : "";
+  document.getElementById("saludo").textContent = perfil ? gen("Bienvenido","Bienvenida","Bienvenide") + ", " + perfil.nombre : "";
 }
 function abrirPerfil(obligatorio){
   document.getElementById("pNombre").value = perfil ? perfil.nombre : "";
