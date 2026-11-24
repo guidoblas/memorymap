@@ -110,7 +110,7 @@ input[type=checkbox]{width:auto;margin:0}
 <label class="chk"><input type="checkbox" id="qZona"> Solo lo que se ve en el mapa</label>
 </div>
 <div id="secLista">
-<h2>Mis recuerdos</h2>
+<h2 id="hLista">Mis recuerdos</h2>
 <div class="estado" id="contador"></div>
 <button class="btn2" id="qLimpiar" type="button" style="display:none;margin:0 0 12px">Quitar filtros</button>
 <div id="lista"></div>
@@ -429,20 +429,20 @@ function pintarPines(){
   capa.clearLayers();
   filtradas(false).forEach(function(n){
     if(!n.ubicacion) return;
-    var m = L.marker([n.ubicacion.lat, n.ubicacion.lon]);
-    var d = document.createElement("div");
-    var b = document.createElement("b"); b.textContent = n.titulo || "Sin título";
-    d.append(b, document.createElement("br"), formatear(n.fecha));
-    m.bindPopup(d);
+    var m = L.marker([n.ubicacion.lat, n.ubicacion.lon], {title: n.titulo || "Recuerdo"});
     m.on("click", function(){ irARecuerdo(n.id); });
     capa.addLayer(m);
   });
 }
 function irARecuerdo(id){
-  var el = document.getElementById("r-" + id);
-  if(!el) return;
-  el.classList.add("resaltado");
-  setTimeout(function(){ el.classList.remove("resaltado"); }, 2500);
+  vista("hilo");
+  setTimeout(function(){
+    var el = document.getElementById("r-" + id);
+    if(!el) return;
+    el.scrollIntoView({behavior:"smooth", block:"center"});
+    el.classList.add("resaltado");
+    setTimeout(function(){ el.classList.remove("resaltado"); }, 2500);
+  }, 100);
 }
 function fijarCoords(lat, lon, nombre){
   coords = {lat: +lat.toFixed(5), lon: +lon.toFixed(5)};
@@ -589,7 +589,7 @@ function hayFiltros(){
 function filtradas(conZona){
   var q = norm(document.getElementById("qTexto").value.trim());
   var c = document.getElementById("qCat").value || "__todas";
-  var b = (conZona && document.getElementById("qZona").checked && mp) ? mp.getBounds() : null;
+  var b = (conZona && document.getElementById("qZona").checked && mp && document.getElementById("mapaBox").style.display !== "none") ? mp.getBounds() : null;
   return entradas.filter(function(n){
     if(c === "__sin" && n.categoria) return false;
     if(c !== "__todas" && c !== "__sin" && n.categoria !== c) return false;
@@ -625,11 +625,15 @@ function vista(v){
   document.getElementById("secForm").style.display = v === "nuevo" ? "block" : "none";
   document.getElementById("secBuscar").style.display = v === "buscar" ? "block" : "none";
   document.getElementById("secLista").style.display = (v === "mapa" || v === "hilo" || v === "buscar") ? "block" : "none";
+  var soloMapa = v === "mapa" || (v === "buscar" && vistaLista === "mapa");
+  document.getElementById("hLista").style.display = soloMapa ? "none" : "block";
+  document.getElementById("lista").style.display = soloMapa ? "none" : "block";
   document.getElementById("secPerfil").style.display = v === "perfil" ? "block" : "none";
   document.getElementById("secCopia").style.display = v === "copia" ? "block" : "none";
   mostrarMapa(v === "mapa" || v === "nuevo" || (v === "buscar" && vistaLista === "mapa"));
   cerrarMenu();
   window.scrollTo(0, 0);
+  dibujar(true);
 }
 document.getElementById("btnMenu").onclick = abrirMenu;
 document.getElementById("cortina").onclick = cerrarMenu;
