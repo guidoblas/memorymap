@@ -264,6 +264,7 @@ function limpiarForm(){
   document.getElementById("guardar").textContent = "Guardar recuerdo";
   document.getElementById("cancelar").style.display = "none";
   document.getElementById("aviso").textContent = "";
+  document.getElementById("sugs").textContent = "";
 }
 function iniciarEdicion(n){
   editando = n.id;
@@ -653,6 +654,40 @@ document.getElementById("qLimpiar").onclick = function(){
   document.getElementById("qCat").value = "__todas";
   document.getElementById("qZona").checked = false;
   dibujar();
+};
+var tAuto = null, ctrlAuto = null;
+function nombreFoto(p){
+  return p.name || ((p.street || "") + (p.housenumber ? " " + p.housenumber : ""));
+}
+function sugerir(q){
+  var cont = document.getElementById("sugs");
+  if(ctrlAuto) ctrlAuto.abort();
+  ctrlAuto = new AbortController();
+  fetch("https://photon.komoot.io/api/?limit=5&q=" + encodeURIComponent(q), {signal: ctrlAuto.signal})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      cont.textContent = "";
+      (d.features || []).forEach(function(f){
+        var p = f.properties || {}, c = f.geometry.coordinates;
+        var n = nombreFoto(p);
+        var partes = [n, p.city, p.state, p.country].filter(function(x, i, a){ return x && a.indexOf(x) === i; });
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "sug"; b.textContent = partes.join(", ");
+        b.onclick = function(){
+          cont.textContent = "";
+          document.getElementById("estadoUbic").textContent = "";
+          fijarCoords(c[1], c[0], (p.country && p.country !== n) ? n + ", " + p.country : n);
+        };
+        cont.append(b);
+      });
+    })
+    .catch(function(){});
+}
+document.getElementById("lugar").oninput = function(){
+  var q = this.value.trim();
+  clearTimeout(tAuto);
+  if(q.length < 3){ document.getElementById("sugs").textContent = ""; return; }
+  tAuto = setTimeout(function(){ sugerir(q); }, 500);
 };
 refrescarCats();
 vista("mapa");
