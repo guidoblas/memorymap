@@ -112,6 +112,7 @@ input[type=checkbox]{width:auto;margin:0}
 <div id="secLista">
 <h2 id="hLista">Mis recuerdos</h2>
 <div class="estado" id="contador"></div>
+<button class="btn2" id="volverMapa" type="button" style="display:none;margin:0 0 12px">← Volver al mapa</button>
 <button class="btn2" id="qLimpiar" type="button" style="display:none;margin:0 0 12px">Quitar filtros</button>
 <div id="lista"></div>
 </div>
@@ -291,8 +292,9 @@ function dibujar(soloLista){
   var lista = document.getElementById("lista");
   lista.textContent = "";
   var vis = filtradas(true);
-  document.getElementById("contador").textContent = vis.length + (vis.length === 1 ? " recuerdo" : " recuerdos") + (hayFiltros() ? " con los filtros actuales" : "");
-  document.getElementById("qLimpiar").style.display = hayFiltros() ? "inline-block" : "none";
+  document.getElementById("contador").textContent = soloId ? "Recuerdo seleccionado" : vis.length + (vis.length === 1 ? " recuerdo" : " recuerdos") + (hayFiltros() ? " con los filtros actuales" : "");
+  document.getElementById("qLimpiar").style.display = (hayFiltros() && !soloId) ? "inline-block" : "none";
+  document.getElementById("volverMapa").style.display = soloId ? "inline-block" : "none";
   if(!vis.length){
     var v = document.createElement("div");
     v.className = "vacio";
@@ -325,6 +327,7 @@ function dibujar(soloLista){
         n.media.forEach(function(m){ borrarMedia(m.id); });
         entradas = entradas.filter(function(x){return x.id !== n.id});
         guardarTodo(); dibujar();
+        if(soloId) vista(vistaLista);
       }
     };
     d.append(t,c,h);
@@ -435,14 +438,7 @@ function pintarPines(){
   });
 }
 function irARecuerdo(id){
-  vista("hilo");
-  setTimeout(function(){
-    var el = document.getElementById("r-" + id);
-    if(!el) return;
-    el.scrollIntoView({behavior:"smooth", block:"center"});
-    el.classList.add("resaltado");
-    setTimeout(function(){ el.classList.remove("resaltado"); }, 2500);
-  }, 100);
+  vista("hilo", id);
 }
 function fijarCoords(lat, lon, nombre){
   coords = {lat: +lat.toFixed(5), lon: +lon.toFixed(5)};
@@ -582,6 +578,7 @@ document.getElementById("bPerfil").onclick = function(){ abrirPerfil(false); };
 cargarPerfil(); mostrarPerfil();
 if(!perfil) abrirPerfil(true);
 var vistaLista = "mapa";
+var soloId = null;
 function norm(t){ return (t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
 function hayFiltros(){
   return !!document.getElementById("qTexto").value.trim() || (document.getElementById("qCat").value || "__todas") !== "__todas" || document.getElementById("qZona").checked;
@@ -589,6 +586,7 @@ function hayFiltros(){
 function filtradas(conZona){
   var q = norm(document.getElementById("qTexto").value.trim());
   var c = document.getElementById("qCat").value || "__todas";
+  if(conZona && soloId) return entradas.filter(function(n){ return n.id === soloId; });
   var b = (conZona && document.getElementById("qZona").checked && mp && document.getElementById("mapaBox").style.display !== "none") ? mp.getBounds() : null;
   return entradas.filter(function(n){
     if(c === "__sin" && n.categoria) return false;
@@ -620,8 +618,9 @@ function cerrarMenu(){
   document.getElementById("menu").style.transform = "translateX(-105%)";
   document.getElementById("cortina").style.display = "none";
 }
-function vista(v){
-  if(v === "mapa" || v === "hilo") vistaLista = v;
+function vista(v, id){
+  soloId = id || null;
+  if((v === "mapa" || v === "hilo") && !id) vistaLista = v;
   document.getElementById("secForm").style.display = v === "nuevo" ? "block" : "none";
   document.getElementById("secBuscar").style.display = v === "buscar" ? "block" : "none";
   document.getElementById("secLista").style.display = (v === "mapa" || v === "hilo" || v === "buscar") ? "block" : "none";
@@ -635,6 +634,7 @@ function vista(v){
   window.scrollTo(0, 0);
   dibujar(true);
 }
+document.getElementById("volverMapa").onclick = function(){ vista("mapa"); };
 document.getElementById("btnMenu").onclick = abrirMenu;
 document.getElementById("cortina").onclick = cerrarMenu;
 document.getElementById("btnNuevo").onclick = function(){ limpiarForm(); vista("nuevo"); };
