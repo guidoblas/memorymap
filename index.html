@@ -62,6 +62,10 @@ select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px 
 .it:hover,.it:focus-visible{background:var(--bg)}
 .it.sub{padding-left:28px;font-size:15px;color:var(--muted)}
 .chk{display:flex;gap:8px;align-items:center;color:var(--ink)}
+.tpin{display:inline-block;height:1.05em;vertical-align:-0.14em;margin:0 1px}
+.tpin svg{display:block;height:100%;width:auto}
+.pinLife{background:none;border:0}
+.pinLife svg{display:block;width:34px;height:44px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
 input[type=checkbox]{width:auto;margin:0}
 .aviso{color:#b3261e;font-size:14px;margin:-6px 0 12px;min-height:1em}
 </style>
@@ -74,7 +78,7 @@ input[type=checkbox]{width:auto;margin:0}
 </head>
 <body>
 <main>
-<div class="top"><button class="ic" id="btnMenu" type="button" aria-label="Abrir menú">☰</button><h1>Life</h1><button class="ic" id="btnNuevo" type="button" aria-label="Nuevo recuerdo">+</button></div>
+<div class="top"><button class="ic" id="btnMenu" type="button" aria-label="Abrir menú">☰</button><h1 aria-label="Life">L<span class="tpin" id="tpin"></span>fe</h1><button class="ic" id="btnNuevo" type="button" aria-label="Nuevo recuerdo">+</button></div>
 <p id="saludo" style="margin:-8px 0 14px;color:var(--muted)"></p>
 <div id="mapaBox"><div id="mapa"></div></div>
 <div id="secForm" style="display:none">
@@ -440,9 +444,10 @@ function iniciarMapa(){
 function pintarPines(){
   if(!capa) return;
   capa.clearLayers();
+  var ic = L.divIcon({html: PIN_SVG, className: "pinLife", iconSize: [34, 44], iconAnchor: [17, 44]});
   filtradas(false).forEach(function(n){
     if(!n.ubicacion) return;
-    var m = L.marker([n.ubicacion.lat, n.ubicacion.lon], {title: n.titulo || "Recuerdo"});
+    var m = L.marker([n.ubicacion.lat, n.ubicacion.lon], {title: n.titulo || "Recuerdo", icon: ic});
     m.on("click", function(){ irARecuerdo(n.id); });
     capa.addLayer(m);
   });
@@ -698,7 +703,9 @@ document.getElementById("lugar").oninput = function(){
   if(q.length < 3){ document.getElementById("sugs").textContent = ""; return; }
   tAuto = setTimeout(function(){ sugerir(q); }, 500);
 };
-var VERSION_APP = "1.1";
+var PIN_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 52" aria-hidden="true"><path d="M20 50L34.4 27A17 17 0 1 0 5.6 27Z" style="fill:var(--accent);stroke:var(--surface);stroke-width:1.5;stroke-linejoin:round"/><path d="M23.59 24.81 22.83 24.33 22.34 25.02C21.45 26.36 20.66 27.09 20.14 27.09C19.86 27.09 19.62 26.84 19.62 26.57C19.62 26.26 19.79 25.36 19.93 24.78L23.07 13.26C21.21 13.67 18.79 14.02 16.1 14.22V15.16H16.55C17.59 15.16 18.14 15.5 18.14 16.16C18.14 16.43 18.03 16.95 17.9 17.53L15.9 24.95C15.62 25.95 15.45 26.84 15.45 27.33C15.45 28.64 16.41 29.5 17.83 29.5C19.9 29.5 21.17 28.47 23.59 24.81ZM24.55 8.84C24.55 7.57 23.48 6.5 22.17 6.5C20.97 6.5 19.9 7.57 19.9 8.78C19.9 10.12 20.9 11.16 22.17 11.16C23.48 11.16 24.55 10.12 24.55 8.84Z" style="fill:var(--surface)"/></svg>';
+document.getElementById("tpin").innerHTML = PIN_SVG;
+var VERSION_APP = "1.2";
 document.getElementById("verApp").textContent = "Versión " + VERSION_APP;
 document.getElementById("itAct").onclick = async function(){
   var est = document.getElementById("verApp");
