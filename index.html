@@ -3,7 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Mi diario</title>
+<title>Life</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="theme-color" content="#1f6f78">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Life">
 <style>
 :root{--bg:#eef2f4;--surface:#fff;--ink:#1b2a33;--muted:#5b6b73;--accent:#1f6f78;--accent-ink:#fff;--line:#d5dde1;
 box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -67,7 +74,7 @@ input[type=checkbox]{width:auto;margin:0}
 </head>
 <body>
 <main>
-<div class="top"><button class="ic" id="btnMenu" type="button" aria-label="Abrir menú">☰</button><h1>Mi diario</h1><button class="ic" id="btnNuevo" type="button" aria-label="Nuevo recuerdo">+</button></div>
+<div class="top"><button class="ic" id="btnMenu" type="button" aria-label="Abrir menú">☰</button><h1>Life</h1><button class="ic" id="btnNuevo" type="button" aria-label="Nuevo recuerdo">+</button></div>
 <p id="saludo" style="margin:-8px 0 14px;color:var(--muted)"></p>
 <div id="mapaBox"><div id="mapa"></div></div>
 <div id="secForm" style="display:none">
@@ -142,6 +149,8 @@ input[type=checkbox]{width:auto;margin:0}
 <button class="it" type="button" data-vista="buscar">Buscar</button>
 <button class="it" type="button" data-vista="perfil">Mi perfil</button>
 <button class="it" type="button" data-vista="copia">Copia de seguridad</button>
+<button class="it" type="button" id="itAct">Buscar actualización</button>
+<div class="estado" id="verApp" style="padding:0 12px"></div>
 </nav>
 <div id="perfilBox" class="velo" style="display:none">
 <form class="card" onsubmit="return false">
@@ -417,7 +426,7 @@ var mp = null, capa = null, eligiendo = false, pinElegido = null;
 function iniciarMapa(){
   if(!window.L){ document.getElementById("mapa").textContent = "No se pudo cargar el mapa. Revisá tu conexión."; return; }
   mp = L.map("mapa", {worldCopyJump:true}).setView([20,0], 2);
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, attribution:"© OpenStreetMap"}).addTo(mp);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:19, crossOrigin:true, attribution:"© OpenStreetMap"}).addTo(mp);
   capa = L.markerClusterGroup();
   mp.addLayer(capa);
   mp.on("moveend", function(){ if(document.getElementById("qZona").checked) dibujar(true); });
@@ -689,6 +698,23 @@ document.getElementById("lugar").oninput = function(){
   if(q.length < 3){ document.getElementById("sugs").textContent = ""; return; }
   tAuto = setTimeout(function(){ sugerir(q); }, 500);
 };
+var VERSION_APP = "1.1";
+document.getElementById("verApp").textContent = "Versión " + VERSION_APP;
+document.getElementById("itAct").onclick = async function(){
+  var est = document.getElementById("verApp");
+  if(!navigator.onLine){ est.textContent = "Sin conexión: no se puede buscar ahora. Versión " + VERSION_APP; return; }
+  est.textContent = "Buscando actualización…";
+  try {
+    if("serviceWorker" in navigator){
+      var reg = await navigator.serviceWorker.getRegistration();
+      if(reg) await reg.update();
+    }
+  } catch(e){}
+  location.reload();
+};
+if("serviceWorker" in navigator){
+  window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+}
 refrescarCats();
 vista("mapa");
 iniciarMapa();
